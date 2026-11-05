@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.16.3)
 project("ViPER4Android")
 
-set(VERSION_CODE "00000000" CACHE STRING "Build version code")
-set(VERSION_NAME "0.0.0" CACHE STRING "Build version name")
+set(VERSION_CODE "20261009" CACHE STRING "Build version code")
+set(VERSION_NAME "v2.1.1" CACHE STRING "Build version name")
 
 add_compile_definitions(VERSION_CODE=${VERSION_CODE})
 add_compile_definitions(VERSION_NAME="${VERSION_NAME}")

@@ -67,6 +67,8 @@ for abi in abis:
         f"-DANDROID_ABI={abi}",
         "-DANDROID_PLATFORM=android-21",
         "-DANDROID_ARM_NEON=TRUE",
+        "-DVERSION_CODE=20261009",
+        "-DVERSION_NAME=v2.1.1",
         "-DCMAKE_BUILD_TYPE=Release",
         "-S", SCRIPT_DIR
     ]
