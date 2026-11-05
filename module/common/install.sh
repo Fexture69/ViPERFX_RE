@@ -7,13 +7,20 @@ echo -n $LIBPATCH >$MODPATH/libpatch.txt
 
 ui_print "    Copying lib files..."
 
-cp_ch -n $MODPATH/common/files/libv4a_re_$ABI32.so $MODPATH$LIBDIR/lib/soundfx/libv4a_re.so
-if [ "$IS64BIT" ]; then
+if [ -f "$MODPATH/common/files/libv4a_re_$ABI32.so" ]; then
+  cp_ch -n $MODPATH/common/files/libv4a_re_$ABI32.so $MODPATH$LIBDIR/lib/soundfx/libv4a_re.so
+fi
+if [ "$IS64BIT" ] && [ -f "$MODPATH/common/files/libv4a_re_$ABI.so" ]; then
   cp_ch -n $MODPATH/common/files/libv4a_re_$ABI.so $MODPATH$LIBDIR/lib64/soundfx/libv4a_re.so
 fi
 
+# Ensure system.prop, sepolicy.rule and aml.sh are deployed to root of module
+[ -f "$MODPATH/common/system.prop" ] && cp -f "$MODPATH/common/system.prop" "$MODPATH/system.prop"
+[ -f "$MODPATH/common/sepolicy.rule" ] && cp -f "$MODPATH/common/sepolicy.rule" "$MODPATH/sepolicy.rule"
+[ -f "$MODPATH/common/aml.sh" ] && cp -f "$MODPATH/common/aml.sh" "$MODPATH/aml.sh"
+
 ui_print "    Patching audio_effects config files"
-CFGS="$(find /odm /system /vendor -type f -name "*audio_effects*.conf" -o -name "*audio_effects*.xml")"
+CFGS="$(find /odm /system /vendor /product /system_ext -type f \( -name "*audio_effects*.conf" -o -name "*audio_effects*.xml" -o -name "*audio_effects_sec*.xml" \) 2>/dev/null)"
 for OFILE in ${CFGS}; do
   FILE="$MODPATH$(echo $OFILE | sed "s|^/vendor|/system/vendor|g")"
   cp_ch -n $OFILE $FILE

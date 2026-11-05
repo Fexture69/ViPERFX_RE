@@ -163,8 +163,9 @@ void ViperContext::HandleSetConfig(const effect_config_t *new_config) {
         return;
     }
 
-    if (config_.input_cfg.channels != AUDIO_CHANNEL_OUT_STEREO) {
-        VIPER_LOGE("ViPER4Android disabled, reason [CH != 2]");
+    if (config_.input_cfg.channels != AUDIO_CHANNEL_OUT_STEREO
+        && config_.input_cfg.channels != AUDIO_CHANNEL_OUT_MONO) {
+        VIPER_LOGE("ViPER4Android disabled, reason [CH != STEREO/MONO]");
         SetDisableReason(
             DisableReason::INVALID_CHANNEL_COUNT,
             "Invalid channel count: " + std::to_string(config_.input_cfg.channels)
@@ -488,6 +489,16 @@ void PcmToFloat(float *dst, const T *src, const size_t frame_count) {
 }
 
 template <typename T>
+void PcmToFloatMono(float *dst, const T *src, const size_t frame_count) {
+    constexpr auto max_val = static_cast<float>(std::numeric_limits<T>::max());
+    for (size_t i = 0; i < frame_count; i++) {
+        const float val = static_cast<float>(src[i]) / max_val;
+        dst[i * 2] = val;
+        dst[i * 2 + 1] = val;
+    }
+}
+
+template <typename T>
 static const T &clamp(const T &v, const T &lo, const T &hi) {
     return std::min(std::max(v, lo), hi);
 }
@@ -501,6 +512,13 @@ static void FloatToFloat(
         }
     } else {
         memcpy(dst, src, frame_count * 2 * sizeof(float));
+    }
+}
+
+static void FloatToFloatMono(float *dst, const float *src, const size_t frame_count) {
+    for (size_t i = 0; i < frame_count; i++) {
+        dst[i * 2] = src[i];
+        dst[i * 2 + 1] = src[i];
     }
 }
 
@@ -520,6 +538,42 @@ void FloatToPcm(
             );
         } else {
             dst[i] = pcm;
+        }
+    }
+}
+
+template <typename T, typename U>
+void FloatToPcmMono(
+    T *dst, const float *src, const size_t frame_count, const bool accumulate
+) {
+    constexpr T max_val = std::numeric_limits<T>::max();
+    constexpr T min_val = std::numeric_limits<T>::min();
+
+    for (size_t i = 0; i < frame_count; i++) {
+        const float mono_sample = (src[i * 2] + src[i * 2 + 1]) * 0.5f;
+        T pcm = static_cast<T>(mono_sample * static_cast<float>(max_val));
+        if (accumulate) {
+            U temp = static_cast<U>(dst[i]) + pcm;
+            dst[i] = static_cast<T>(
+                clamp(temp, static_cast<U>(min_val), static_cast<U>(max_val))
+            );
+        } else {
+            dst[i] = pcm;
+        }
+    }
+}
+
+static void FloatToFloatMonoOut(
+    float *dst, const float *src, const size_t frame_count, const bool accumulate
+) {
+    if (accumulate) {
+        for (size_t i = 0; i < frame_count; i++) {
+            const float mono_sample = (src[i * 2] + src[i * 2 + 1]) * 0.5f;
+            dst[i] = clamp(dst[i] + mono_sample, -1.0f, 1.0f);
+        }
+    } else {
+        for (size_t i = 0; i < frame_count; i++) {
+            dst[i] = (src[i * 2] + src[i * 2 + 1]) * 0.5f;
         }
     }
 }
@@ -564,50 +618,99 @@ int32_t ViperContext::Process(audio_buffer_t *in_buffer, audio_buffer_t *out_buf
         buffer_frame_count_ = frame_count;
     }
 
-    switch (config_.input_cfg.format) {
-        case AUDIO_FORMAT_PCM_16_BIT:
-            PcmToFloat<int16_t>(buffer_.data(), in_buffer->s16, frame_count);
-            break;
-        case AUDIO_FORMAT_PCM_32_BIT:
-            PcmToFloat<int32_t>(buffer_.data(), in_buffer->s32, frame_count);
-            break;
-        case AUDIO_FORMAT_PCM_FLOAT:
-            FloatToFloat(buffer_.data(), in_buffer->f32, frame_count, false);
-            break;
-        default:
+    const bool is_mono = config_.input_cfg.channels == AUDIO_CHANNEL_OUT_MONO;
+    if (is_mono) {
+        switch (config_.input_cfg.format) {
+            case AUDIO_FORMAT_PCM_16_BIT:
+                PcmToFloatMono<int16_t>(buffer_.data(), in_buffer->s16, frame_count);
+                break;
+            case AUDIO_FORMAT_PCM_32_BIT:
+                PcmToFloatMono<int32_t>(buffer_.data(), in_buffer->s32, frame_count);
+                break;
+            case AUDIO_FORMAT_PCM_FLOAT:
+                FloatToFloatMono(buffer_.data(), in_buffer->f32, frame_count);
+                break;
+            default:
 #if defined(__aarch64__)
-            asm volatile("msr fpcr, %0" ::"r"(orig_fpcr));
+                asm volatile("msr fpcr, %0" ::"r"(orig_fpcr));
 #elif defined(__arm__)
-            asm volatile("vmsr fpscr, %0" ::"r"(orig_fpscr));
+                asm volatile("vmsr fpscr, %0" ::"r"(orig_fpscr));
 #endif
-            return -EINVAL;
+                return -EINVAL;
+        }
+    } else {
+        switch (config_.input_cfg.format) {
+            case AUDIO_FORMAT_PCM_16_BIT:
+                PcmToFloat<int16_t>(buffer_.data(), in_buffer->s16, frame_count);
+                break;
+            case AUDIO_FORMAT_PCM_32_BIT:
+                PcmToFloat<int32_t>(buffer_.data(), in_buffer->s32, frame_count);
+                break;
+            case AUDIO_FORMAT_PCM_FLOAT:
+                FloatToFloat(buffer_.data(), in_buffer->f32, frame_count, false);
+                break;
+            default:
+#if defined(__aarch64__)
+                asm volatile("msr fpcr, %0" ::"r"(orig_fpcr));
+#elif defined(__arm__)
+                asm volatile("vmsr fpscr, %0" ::"r"(orig_fpscr));
+#endif
+                return -EINVAL;
+        }
     }
 
     viper_.Process(buffer_, frame_count);
 
     const bool accumulate =
         config_.output_cfg.access_mode == EFFECT_BUFFER_ACCESS_ACCUMULATE;
-    switch (config_.output_cfg.format) {
-        case AUDIO_FORMAT_PCM_16_BIT:
-            FloatToPcm<int16_t, int32_t>(
-                out_buffer->s16, buffer_.data(), frame_count, accumulate
-            );
-            break;
-        case AUDIO_FORMAT_PCM_32_BIT:
-            FloatToPcm<int32_t, int64_t>(
-                out_buffer->s32, buffer_.data(), frame_count, accumulate
-            );
-            break;
-        case AUDIO_FORMAT_PCM_FLOAT:
-            FloatToFloat(out_buffer->f32, buffer_.data(), frame_count, accumulate);
-            break;
-        default:
+    const bool is_out_mono = config_.output_cfg.channels == AUDIO_CHANNEL_OUT_MONO;
+
+    if (is_out_mono) {
+        switch (config_.output_cfg.format) {
+            case AUDIO_FORMAT_PCM_16_BIT:
+                FloatToPcmMono<int16_t, int32_t>(
+                    out_buffer->s16, buffer_.data(), frame_count, accumulate
+                );
+                break;
+            case AUDIO_FORMAT_PCM_32_BIT:
+                FloatToPcmMono<int32_t, int64_t>(
+                    out_buffer->s32, buffer_.data(), frame_count, accumulate
+                );
+                break;
+            case AUDIO_FORMAT_PCM_FLOAT:
+                FloatToFloatMonoOut(out_buffer->f32, buffer_.data(), frame_count, accumulate);
+                break;
+            default:
 #if defined(__aarch64__)
-            asm volatile("msr fpcr, %0" ::"r"(orig_fpcr));
+                asm volatile("msr fpcr, %0" ::"r"(orig_fpcr));
 #elif defined(__arm__)
-            asm volatile("vmsr fpscr, %0" ::"r"(orig_fpscr));
+                asm volatile("vmsr fpscr, %0" ::"r"(orig_fpscr));
 #endif
-            return -EINVAL;
+                return -EINVAL;
+        }
+    } else {
+        switch (config_.output_cfg.format) {
+            case AUDIO_FORMAT_PCM_16_BIT:
+                FloatToPcm<int16_t, int32_t>(
+                    out_buffer->s16, buffer_.data(), frame_count, accumulate
+                );
+                break;
+            case AUDIO_FORMAT_PCM_32_BIT:
+                FloatToPcm<int32_t, int64_t>(
+                    out_buffer->s32, buffer_.data(), frame_count, accumulate
+                );
+                break;
+            case AUDIO_FORMAT_PCM_FLOAT:
+                FloatToFloat(out_buffer->f32, buffer_.data(), frame_count, accumulate);
+                break;
+            default:
+#if defined(__aarch64__)
+                asm volatile("msr fpcr, %0" ::"r"(orig_fpcr));
+#elif defined(__arm__)
+                asm volatile("vmsr fpscr, %0" ::"r"(orig_fpscr));
+#endif
+                return -EINVAL;
+        }
     }
 
 #if defined(__aarch64__)

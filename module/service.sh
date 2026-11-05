@@ -38,7 +38,7 @@ mount_config() {
 }
 
 kill_audio_procs() {
-  for proc in audioserver audiohalservice; do
+  for proc in audioserver audiohalservice android.hardware.audio.service vendor.samsung.hardware.audio.service; do
     local pids
     pids=$(ps -A 2>/dev/null | grep "$proc" | grep -v grep | awk '{ if ($1 ~ /^[0-9]+$/) print $1; else if ($2 ~ /^[0-9]+$/) print $2 }')
     for pid in $pids; do
@@ -53,7 +53,7 @@ if [ "$SELF_MOUNT" = true ]; then
     mount_effect_lib "/system/$arch/soundfx" "$MODDIR/system/$arch/soundfx"
   done
 
-  for original in $(find /odm /system /vendor -type f \( -name 'audio_effects*.conf' -o -name 'audio_effects*.xml' \) 2>/dev/null); do
+  for original in $(find /odm /system /vendor /product /system_ext -type f \( -name 'audio_effects*.conf' -o -name 'audio_effects*.xml' -o -name 'audio_effects_sec*.xml' \) 2>/dev/null); do
     case "$original" in
       /vendor/*) module_path="$MODDIR/system$original" ;;
       *) module_path="$MODDIR$original" ;;

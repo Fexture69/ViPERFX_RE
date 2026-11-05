@@ -71,6 +71,9 @@ module: libs
 	@touch $(MODULE_OUT)/skip_mountify
 	@cp $(MODULE_DIR)/LICENSE $(MODULE_OUT)/
 	@cp -r $(MODULE_DIR)/common/* $(MODULE_OUT)/common/
+	@[ -f $(MODULE_DIR)/system.prop ] && cp $(MODULE_DIR)/system.prop $(MODULE_OUT)/ || true
+	@[ -f $(MODULE_DIR)/sepolicy.rule ] && cp $(MODULE_DIR)/sepolicy.rule $(MODULE_OUT)/ || true
+	@[ -f $(MODULE_DIR)/aml.sh ] && cp $(MODULE_DIR)/aml.sh $(MODULE_OUT)/ || true
 	@sed -i.bak \
 		-e 's/^version=.*/version=$(VERSION_NAME)/' \
 		-e 's/^versionCode=.*/versionCode=$(VERSION_CODE)/' \

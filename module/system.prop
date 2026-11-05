@@ -1,0 +1,20 @@
+# ViPER4Android Audio Offload Configuration for Samsung Galaxy S24+ (Exynos 2400)
+# Disables hardware audio offloading to force all media playback through audioserver/soundfx
+
+# Core Android Audio Offload flags
+audio.offload.disable=1
+audio.deep_buffer.media=0
+audio.offload.min.duration.secs=0
+audio.offload.video=false
+audio.offload.buffer.size.kb=0
+
+# Vendor & Samsung Exynos (s5e9945) Audio Offload flags
+vendor.audio.offload.disable=1
+vendor.audio.offload.buffer.size.kb=0
+vendor.audio.offload.gapless.enabled=false
+vendor.audio.offload.multiple.enabled=false
+vendor.audio.offload.passthrough=false
+vendor.audio.offload.track.enable=false
+
+# Samsung AudioFlinger & low-latency buffers
+ro.audio.flinger_standbytime_ms=300

@@ -8,6 +8,12 @@ add_compile_definitions(VERSION_CODE=${VERSION_CODE})
 add_compile_definitions(VERSION_NAME="${VERSION_NAME}")
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+set(CMAKE_C_LINK_OPTIONS_IPO "-fuse-ld=lld")
+set(CMAKE_CXX_LINK_OPTIONS_IPO "-fuse-ld=lld")
+
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    add_compile_options(-fvectorize)
+endif()
 
 add_compile_options(
     -O3 -DNDEBUG

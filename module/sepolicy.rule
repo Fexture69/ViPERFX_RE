@@ -1,0 +1,11 @@
+# ViPER4Android SELinux rules for Samsung Knox / One UI (Exynos 2400)
+allow audioserver audioserver_tmpfs file { read write execute }
+allow hal_audio_default hal_audio_default_tmpfs file { read write execute }
+allow hal_audio_default vendor_file file { rx_file_perms }
+allow hal_audio_default system_file file { rx_file_perms }
+allow hal_audio_default hal_audio_default process { execmem }
+allow priv_app viper_control_service service_manager find
+allow priv_app default_android_service service_manager find
+allow priv_app hal_audio_default binder { call transfer }
+allow hal_audio_default priv_app binder { call transfer }
+allow audioserver viper_control_service service_manager { add find }
